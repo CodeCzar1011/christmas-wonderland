@@ -1,3 +1,4 @@
+import os
 import pygame
 import math
 import random
@@ -36,9 +37,26 @@ SNOW_BLUE = (230, 240, 255)
 GOLD = (255, 215, 0)
 RED = (220, 20, 20)
 GREEN = (0, 150, 0)
+MUSIC_FILE = "Carol Of The Bells  Christmas Music  Instrumental Version.mp3"
 
 # Animation variables
 animation_frame = 0
+
+
+def start_music():
+    """Start background music if the MP3 file is available."""
+    music_path = os.path.join(os.path.dirname(__file__), MUSIC_FILE)
+    if not os.path.exists(music_path):
+        return
+    try:
+        if not pygame.mixer.get_init():
+            pygame.mixer.init()
+        pygame.mixer.music.load(music_path)
+        pygame.mixer.music.set_volume(0.35)
+        pygame.mixer.music.play(-1)
+    except pygame.error:
+        # Silently continue if audio device is unavailable
+        pass
 
 
 class SnowParticle:
@@ -859,6 +877,9 @@ def draw_santa(surface, x, y, wave_offset=0):
 # Create snow particles
 snow_particles = [SnowParticle() for _ in range(400)]
 
+# Start music once
+start_music()
+
 # Main loop
 running = True
 clock = pygame.time.Clock()
@@ -910,4 +931,7 @@ while running:
     pygame.display.flip()
     clock.tick(60)
 
+if pygame.mixer.get_init():
+    pygame.mixer.music.stop()
+    pygame.mixer.quit()
 pygame.quit()
