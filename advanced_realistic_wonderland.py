@@ -38,6 +38,11 @@ GOLD = (255, 215, 0)
 RED = (220, 20, 20)
 GREEN = (0, 150, 0)
 MUSIC_FILE = "Carol Of The Bells  Christmas Music  Instrumental Version.mp3"
+SLEIGH_RED = (180, 0, 20)
+SLEIGH_GOLD = (245, 190, 50)
+REINDEER_BROWN = (120, 80, 50)
+REINDEER_LIGHT = (180, 130, 90)
+LEATHER = (90, 50, 20)
 
 # Animation variables
 animation_frame = 0
@@ -676,6 +681,106 @@ def draw_heart(surface, x, y, size):
     # Highlight
     pygame.draw.circle(surface, (255, 180, 200), (int(x - size//2), int(y - size//2)), size//4)
 
+
+def draw_reindeer(surface, x, y, scale=1.0, phase=0.0):
+    """Draw a stylized reindeer with slight animated leg motion."""
+    sx = to_screen_x(x)
+    sy = to_screen_y(y)
+    
+    body_len = int(90 * scale)
+    body_ht = int(28 * scale)
+    head_size = int(18 * scale)
+    leg_phase = math.sin(phase) * 4 * scale
+    
+    # Body
+    pygame.draw.ellipse(surface, REINDEER_BROWN, (sx - body_len//2, sy - body_ht//2, body_len, body_ht))
+    pygame.draw.ellipse(surface, REINDEER_LIGHT, (sx - body_len//3, sy - body_ht//3, body_len//2, body_ht//2))
+    
+    # Legs
+    leg_x_offsets = [-25, -10, 10, 25]
+    for i, lx in enumerate(leg_x_offsets):
+        ly = sy + int(leg_phase if i % 2 == 0 else -leg_phase)
+        pygame.draw.line(surface, REINDEER_BROWN, (sx + lx, sy + body_ht//2), (sx + lx, ly + int(28 * scale)), int(4 * scale))
+        pygame.draw.line(surface, (50, 30, 20), (sx + lx, ly + int(28 * scale)), (sx + lx + int(6 * scale), ly + int(34 * scale)), int(4 * scale))
+    
+    # Neck and head
+    neck_x = sx + int(body_len//2 - 10 * scale)
+    neck_y = sy - int(body_ht//4)
+    pygame.draw.line(surface, REINDEER_BROWN, (neck_x, neck_y), (neck_x + int(8 * scale), neck_y - int(18 * scale)), int(6 * scale))
+    pygame.draw.circle(surface, REINDEER_BROWN, (neck_x + int(14 * scale), neck_y - int(22 * scale)), head_size)
+    pygame.draw.circle(surface, REINDEER_LIGHT, (neck_x + int(8 * scale), neck_y - int(20 * scale)), head_size//2)
+    
+    # Antlers
+    antler_base = (neck_x + int(14 * scale), neck_y - int(22 * scale))
+    for offset in [-1, 1]:
+        pygame.draw.line(surface, (80, 60, 40), antler_base, (antler_base[0] + int(12 * scale * offset), antler_base[1] - int(18 * scale)), int(3 * scale))
+        pygame.draw.line(surface, (80, 60, 40), (antler_base[0] + int(8 * scale * offset), antler_base[1] - int(10 * scale)), (antler_base[0] + int(16 * scale * offset), antler_base[1] - int(4 * scale)), int(3 * scale))
+    
+    # Eye
+    pygame.draw.circle(surface, (0, 0, 0), (neck_x + int(18 * scale), neck_y - int(24 * scale)), max(1, int(2 * scale)))
+    
+    # Nose (small glow)
+    nose_x = neck_x + int(26 * scale)
+    nose_y = neck_y - int(18 * scale)
+    pygame.draw.circle(surface, (200, 30, 30), (nose_x, nose_y), max(3, int(4 * scale)))
+    pygame.draw.circle(surface, (255, 180, 180), (nose_x - int(2 * scale), nose_y - int(2 * scale)), max(1, int(2 * scale)))
+    
+    # Harness
+    pygame.draw.line(surface, LEATHER, (sx + body_len//2 - int(10 * scale), sy - int(6 * scale)), (sx - body_len//2 + int(15 * scale), sy - int(6 * scale)), int(3 * scale))
+    pygame.draw.circle(surface, SLEIGH_GOLD, (sx, sy - int(6 * scale)), max(2, int(3 * scale)))
+
+
+def draw_sleigh(surface, x, y, scale=1.0):
+    """Draw Santa's sleigh."""
+    sx = to_screen_x(x)
+    sy = to_screen_y(y)
+    body_w = int(110 * scale)
+    body_h = int(45 * scale)
+    rail_h = int(18 * scale)
+    
+    # Rails
+    pygame.draw.line(surface, SLEIGH_GOLD, (sx - body_w//2, sy + body_h//2), (sx + body_w//2, sy + body_h//2), int(6 * scale))
+    pygame.draw.arc(surface, SLEIGH_GOLD, (sx + body_w//4, sy + body_h//2 - rail_h, body_w//2, rail_h * 2), math.pi, math.pi * 2, int(5 * scale))
+    
+    # Body base
+    pygame.draw.rect(surface, SLEIGH_RED, (sx - body_w//2, sy - body_h//2, body_w, body_h))
+    pygame.draw.rect(surface, SLEIGH_GOLD, (sx - body_w//2, sy - body_h//2, body_w, body_h), int(4 * scale))
+    
+    # Front curve
+    pygame.draw.arc(surface, SLEIGH_RED, (sx + body_w//3, sy - body_h//2 - int(10 * scale), body_w//2, body_h), math.pi, math.pi * 2, int(12 * scale))
+    pygame.draw.arc(surface, SLEIGH_GOLD, (sx + body_w//3, sy - body_h//2 - int(10 * scale), body_w//2, body_h), math.pi, math.pi * 2, int(4 * scale))
+    
+    # Seat highlight
+    pygame.draw.rect(surface, (255, 230, 200), (sx - body_w//2 + int(10 * scale), sy - body_h//2 + int(10 * scale), body_w - int(20 * scale), int(12 * scale)))
+    
+    # Gift silhouettes inside sleigh
+    pygame.draw.rect(surface, (50, 120, 200), (sx - int(25 * scale), sy - body_h//2 - int(5 * scale), int(20 * scale), int(20 * scale)))
+    pygame.draw.rect(surface, (200, 50, 50), (sx, sy - body_h//2 - int(10 * scale), int(18 * scale), int(22 * scale)))
+    pygame.draw.line(surface, (255, 255, 255), (sx + int(9 * scale), sy - body_h//2 - int(10 * scale)), (sx + int(9 * scale), sy - body_h//2 + int(12 * scale)), int(3 * scale))
+    pygame.draw.line(surface, (255, 255, 255), (sx, sy - body_h//2), (sx + int(18 * scale), sy - body_h//2), int(3 * scale))
+
+
+def draw_sleigh_team(surface, x, y, scale=1.0, phase=0.0):
+    """Draw sleigh with two reindeer and harness ropes."""
+    spacing = int(120 * scale)
+    reindeer1_pos = (x - spacing, y)
+    reindeer2_pos = (x - spacing * 2, y - int(5 * scale))
+    
+    # Ropes from sleigh to reindeer
+    sx = to_screen_x(x)
+    sy = to_screen_y(y)
+    nose1 = (to_screen_x(reindeer1_pos[0] + 40 * scale), to_screen_y(reindeer1_pos[1] - 10 * scale))
+    nose2 = (to_screen_x(reindeer2_pos[0] + 40 * scale), to_screen_y(reindeer2_pos[1] - 10 * scale))
+    pygame.draw.line(surface, LEATHER, (sx - int(50 * scale), sy - int(10 * scale)), nose1, int(3 * scale))
+    pygame.draw.line(surface, LEATHER, (sx - int(50 * scale), sy - int(14 * scale)), nose2, int(3 * scale))
+    
+    # Reindeer
+    draw_reindeer(surface, *reindeer1_pos, scale=scale, phase=phase)
+    draw_reindeer(surface, *reindeer2_pos, scale=scale * 0.95, phase=phase + 0.6)
+    
+    # Sleigh
+    draw_sleigh(surface, x, y, scale=scale)
+
 def draw_santa(surface, x, y, wave_offset=0):
     """Draw Santa Claus waving (x, y in world coordinates)"""
     screen_x = to_screen_x(x)
@@ -906,6 +1011,9 @@ while running:
     draw_realistic_tree(screen, -280, -400, 1.1, 0)
     draw_realistic_tree(screen, 80, -400, 1.3, 100)
     
+    # Sleigh with reindeer flying above the trees
+    draw_sleigh_team(screen, 180, 120, scale=0.8, phase=animation_frame)
+
     # Draw Santa Claus waving in the center
     draw_santa(screen, -100, -370, animation_frame)
     
