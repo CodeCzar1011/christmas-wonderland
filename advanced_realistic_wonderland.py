@@ -66,37 +66,93 @@ def start_music():
 
 class SnowParticle:
     def __init__(self):
-        self.x = random.uniform(-500, 500)
-        self.y = random.uniform(-500, 500)
-        self.size = random.choice([2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 20])  # Varied sizes
-        self.speed = random.uniform(0.3, 1.5)
-        self.drift = random.uniform(-0.2, 0.2)
-        self.opacity = random.randint(100, 255)
-        
-    def update(self):
+        self.reset(top=False)
+
+    def reset(self, top=True):
+        self.x = random.uniform(-520, 520)
+        # Start near the top for respawns, anywhere for initial fill
+        self.y = random.uniform(300, 520) if top else random.uniform(-500, 520)
+        # Weighted sizes: mostly small/medium for even visual coverage
+        r = random.random()
+        if r < 0.7:
+            self.size = random.choice([2, 3, 4])
+        elif r < 0.95:
+            self.size = random.choice([5, 6, 7, 8])
+        else:
+            self.size = random.choice([10, 12])
+        # Speed modestly linked to size so big flakes don’t cluster
+        self.speed = random.uniform(0.7, 1.4) * (0.8 + (16 - self.size) / 20)
+        self.drift = random.uniform(-0.25, 0.25)
+        self.opacity = random.randint(160, 255)
+        # Pretty shape options
+        self.shape = 'flake' if random.random() < 0.18 and self.size >= 6 else 'circle'
+        self.angle = random.uniform(0.0, math.pi * 2)
+        self.spin = random.uniform(-0.03, 0.03)
+        self.float_phase = random.uniform(0.0, math.pi * 2)
+        # Per-particle noise for drift (prevents line alignment)
+        self.noise_seed = random.uniform(0.0, math.pi * 2)
+        self.noise_speed = random.uniform(0.02, 0.05)
+        self.noise_amp_x = random.uniform(0.15, 0.35)
+        self.noise_amp_y = random.uniform(0.05, 0.15)
+
+    def update(self, wind_dx=0.0):
+        # Fall downward in world coords (toward negative y on screen)
         self.y -= self.speed
-        self.x += self.drift
-        if self.y < -500:
-            self.y = 500
-            self.x = random.uniform(-500, 500)
-        if self.x < -500:
-            self.x = 500
-        elif self.x > 500:
-            self.x = -500
+        # subtle float sway + per-particle noise drift
+        self.noise_seed += self.noise_speed
+        sway_x = 0.08 * math.sin(self.float_phase)
+        noise_x = self.noise_amp_x * math.sin(self.noise_seed + self.float_phase * 0.8)
+        noise_y = self.noise_amp_y * math.sin(self.noise_seed * 1.3 + self.float_phase * 0.6)
+        self.x += self.drift + wind_dx + sway_x + noise_x + random.uniform(-0.03, 0.03)
+        self.y -= noise_y
+        self.angle += self.spin
+        self.float_phase += 0.03
+        if self.y < -520:
+            self.reset(top=True)
+        if self.x < -520:
+            self.x = 520
+        elif self.x > 520:
+            self.x = -520
     
     def draw(self, surface):
         screen_x = to_screen_x(self.x)
         screen_y = to_screen_y(self.y)
         
-        # Draw circle outline for larger snowflakes
-        if self.size >= 8:
-            pygame.draw.circle(surface, (200, 200, 220), (screen_x, screen_y), self.size, 2)
-            if self.size >= 12:
+        if self.shape == 'flake':
+            # Rotating six-arm snowflake
+            arm_len = max(4, int(self.size * 1.2))
+            tip_len = max(2, int(self.size * 0.5))
+            for k in range(6):
+                rad = self.angle + k * math.pi / 3
+                ex = screen_x + int(math.cos(rad) * arm_len)
+                ey = screen_y + int(math.sin(rad) * arm_len)
+                pygame.draw.line(surface, (230, 235, 255), (screen_x, screen_y), (ex, ey), 2)
+                # small tips
+                tip_rad1 = rad + math.pi / 12
+                tip_rad2 = rad - math.pi / 12
+                tx1 = ex + int(math.cos(tip_rad1) * tip_len)
+                ty1 = ey + int(math.sin(tip_rad1) * tip_len)
+                tx2 = ex + int(math.cos(tip_rad2) * tip_len)
+                ty2 = ey + int(math.sin(tip_rad2) * tip_len)
+                pygame.draw.line(surface, (230, 235, 255), (ex, ey), (tx1, ty1), 1)
+                pygame.draw.line(surface, (230, 235, 255), (ex, ey), (tx2, ty2), 1)
+            # center and gentle glow
+            pygame.draw.circle(surface, (255, 255, 255), (screen_x, screen_y), max(1, self.size // 4))
+            if self.size >= 8:
+                glow = pygame.Surface((self.size * 6, self.size * 6), pygame.SRCALPHA)
+                pygame.draw.circle(glow, (255, 255, 255, 40), (self.size * 3, self.size * 3), self.size * 3)
+                surface.blit(glow, (screen_x - self.size * 3, screen_y - self.size * 3))
+        else:
+            # Pretty circle flakes with soft glow for midsize
+            if self.size >= 8:
+                pygame.draw.circle(surface, (200, 200, 220), (screen_x, screen_y), self.size, 2)
                 pygame.draw.circle(surface, (180, 180, 200), (screen_x, screen_y), self.size - 3, 1)
-        
-        # Draw filled circle
-        color = (self.opacity, self.opacity, min(255, self.opacity + 30))
-        pygame.draw.circle(surface, color, (screen_x, screen_y), max(1, self.size // 3))
+            color = (self.opacity, self.opacity, min(255, self.opacity + 30))
+            pygame.draw.circle(surface, color, (screen_x, screen_y), max(1, self.size // 3))
+            if 6 <= self.size < 8:
+                glow = pygame.Surface((self.size * 4, self.size * 4), pygame.SRCALPHA)
+                pygame.draw.circle(glow, (255, 255, 255, 30), (self.size * 2, self.size * 2), self.size * 2)
+                surface.blit(glow, (screen_x - self.size * 2, screen_y - self.size * 2))
 
 
 def draw_gradient_sky(surface):
@@ -682,6 +738,237 @@ def draw_heart(surface, x, y, size):
     pygame.draw.circle(surface, (255, 180, 200), (int(x - size//2), int(y - size//2)), size//4)
 
 
+def draw_smoke_puff(surface, cx, cy, r, alpha):
+    puff = pygame.Surface((r * 4, r * 4), pygame.SRCALPHA)
+    pygame.draw.circle(puff, (220, 220, 220, alpha), (r * 2, r * 2), r)
+    pygame.draw.circle(puff, (255, 255, 255, alpha // 2), (r * 2 - r//3, r * 2 - r//3), r // 2)
+    surface.blit(puff, (cx - r * 2, cy - r * 2))
+
+
+def draw_cozy_house(surface, x, y, scale=1.0, phase=0.0):
+    """Draw a small cozy house with chimney and animated smoke."""
+    base_w = int(220 * scale)
+    base_h = int(130 * scale)
+    roof_h = int(80 * scale)
+    sx = to_screen_x(x)
+    sy = to_screen_y(y)
+
+    # Base
+    house_rect = pygame.Rect(sx - base_w // 2, sy - base_h, base_w, base_h)
+    pygame.draw.rect(surface, (165, 120, 90), house_rect)
+    pygame.draw.rect(surface, (90, 60, 40), house_rect, 3)
+
+    # Roof
+    roof_points = [
+        (sx - base_w // 2 - int(10 * scale), sy - base_h),
+        (sx, sy - base_h - roof_h),
+        (sx + base_w // 2 + int(10 * scale), sy - base_h),
+    ]
+    pygame.draw.polygon(surface, (120, 50, 40), roof_points)
+    pygame.draw.polygon(surface, (200, 90, 70), roof_points, 3)
+
+    # Chimney
+    chimney_w = int(28 * scale)
+    chimney_h = int(70 * scale)
+    chimney_rect = pygame.Rect(sx + base_w // 4, sy - base_h - chimney_h + int(10 * scale), chimney_w, chimney_h)
+    pygame.draw.rect(surface, (90, 60, 40), chimney_rect)
+    pygame.draw.rect(surface, (60, 40, 30), chimney_rect, 2)
+
+    # Smoke animation
+    smoke_base_x = chimney_rect.centerx
+    smoke_base_y = chimney_rect.top - int(10 * scale)
+    for i in range(4):
+        puff_r = int((16 - i * 2) * scale)
+        offset_y = int(i * -22 * scale - math.sin(phase * 0.5 + i) * 6 * scale)
+        offset_x = int(math.sin(phase * 0.4 + i * 0.8) * 12 * scale)
+        draw_smoke_puff(surface, smoke_base_x + offset_x, smoke_base_y + offset_y, max(6, puff_r), 90)
+
+    # Door
+    door_w = int(40 * scale)
+    door_h = int(70 * scale)
+    door_rect = pygame.Rect(sx - door_w // 2, sy - door_h, door_w, door_h)
+    pygame.draw.rect(surface, (90, 45, 25), door_rect)
+    pygame.draw.rect(surface, (60, 30, 15), door_rect, 2)
+    pygame.draw.circle(surface, (245, 190, 50), (door_rect.right - int(10 * scale), door_rect.centery), max(2, int(3 * scale)))
+
+    # Windows with interior scenes (mirror-like glass)
+    win_w = int(74 * scale)
+    win_h = int(58 * scale)
+    upstairs_win = pygame.Rect(sx - base_w // 3 - win_w // 2, sy - base_h + int(10 * scale), win_w, win_h)
+    downstairs_win = pygame.Rect(sx + base_w // 3 - win_w // 2, sy - base_h + int(52 * scale), win_w, win_h)
+
+    def draw_window_frame(win_rect):
+        # Outer wood frame
+        frame_th = max(4, int(6 * scale))
+        pygame.draw.rect(surface, (120, 85, 60), win_rect.inflate(frame_th * 2, frame_th * 2), frame_th)
+        # Inner recess shadow
+        inner = win_rect.inflate(-int(2 * scale), -int(2 * scale))
+        shadow = pygame.Surface((inner.width, inner.height), pygame.SRCALPHA)
+        pygame.draw.rect(shadow, (0, 0, 0, 60), pygame.Rect(0, 0, inner.width, inner.height))
+        surface.blit(shadow, inner.topleft)
+        # Sill under window
+        sill_h = max(6, int(8 * scale))
+        sill_rect = pygame.Rect(win_rect.left - int(6 * scale), win_rect.bottom, win_rect.width + int(12 * scale), sill_h)
+        pygame.draw.rect(surface, (140, 100, 70), sill_rect)
+        pygame.draw.rect(surface, (90, 60, 40), sill_rect, 2)
+
+    def draw_window_mullions(win_rect):
+        # Divide into 2x2 panes
+        pane_w = win_rect.width // 2
+        pane_h = win_rect.height // 2
+        bar_th = max(3, int(4 * scale))
+        # Vertical bar
+        pygame.draw.rect(surface, (230, 230, 230), (win_rect.left + pane_w - bar_th // 2, win_rect.top, bar_th, win_rect.height))
+        # Horizontal bar
+        pygame.draw.rect(surface, (230, 230, 230), (win_rect.left, win_rect.top + pane_h - bar_th // 2, win_rect.width, bar_th))
+
+    def draw_curtains(win_rect):
+        # Simple drapes partially open
+        curtain_w = int(win_rect.width * 0.25)
+        curtain_h = win_rect.height
+        left = pygame.Rect(win_rect.left, win_rect.top, curtain_w, curtain_h)
+        right = pygame.Rect(win_rect.right - curtain_w, win_rect.top, curtain_w, curtain_h)
+        # Fold shading
+        for rect, base in [(left, (200, 40, 40)), (right, (200, 40, 40))]:
+            pygame.draw.rect(surface, base, rect)
+            for i in range(5):
+                x = rect.left + int((i + 1) * rect.width / 6)
+                pygame.draw.line(surface, (160, 20, 20), (x, rect.top), (x - 6, rect.bottom), 2)
+        # Tiebacks
+        pygame.draw.circle(surface, (245, 190, 50), (left.right, win_rect.centery), max(3, int(4 * scale)))
+        pygame.draw.circle(surface, (245, 190, 50), (right.left, win_rect.centery), max(3, int(4 * scale)))
+
+    def glass_reflection(win_rect):
+        # Glare overlay only (frame is drawn separately)
+        glass = pygame.Surface((win_rect.width, win_rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(glass, (250, 230, 160, 40), pygame.Rect(0, 0, win_rect.width, win_rect.height))
+        for i in range(0, win_rect.width, 6):
+            alpha = max(0, 35 - i // 5)
+            pygame.draw.line(glass, (255, 255, 255, alpha), (i, 0), (max(0, i - 14), win_rect.height), 2)
+        surface.blit(glass, win_rect.topleft)
+
+    def draw_sleeping_scene(win_rect):
+        # Bed
+        bed = pygame.Rect(win_rect.left + int(win_rect.width * 0.08), win_rect.bottom - int(win_rect.height * 0.35), int(win_rect.width * 0.84), int(win_rect.height * 0.28))
+        pygame.draw.rect(surface, (120, 80, 60), bed)
+        pygame.draw.rect(surface, (90, 60, 40), bed, 2)
+        # Blanket with gentle rise/fall
+        wave = int(3 * math.sin(phase * 0.8))
+        blanket = pygame.Rect(bed.left + 4, bed.top - int(win_rect.height * 0.25) + wave, bed.width - 8, int(win_rect.height * 0.26))
+        pygame.draw.rect(surface, (200, 30, 30), blanket)
+        pygame.draw.rect(surface, (255, 200, 200), blanket, 2)
+        # Person silhouette
+        head_x = bed.left + int(win_rect.width * 0.2)
+        head_y = bed.top - int(win_rect.height * 0.14)
+        pygame.draw.circle(surface, (240, 200, 180), (head_x, head_y), int(win_rect.height * 0.09))
+        pygame.draw.rect(surface, (240, 200, 180), (head_x - int(win_rect.width * 0.18), head_y, int(win_rect.width * 0.36), int(win_rect.height * 0.08)))
+        # Lamp glow
+        lamp_center = (win_rect.right - int(win_rect.width * 0.18), win_rect.top + int(win_rect.height * 0.18))
+        for r in range(18, 2, -3):
+            alpha = int(60 * (r / 18))
+            pygame.draw.circle(surface, (255, 240, 180, alpha), lamp_center, r)
+
+    def draw_tree_gifts_scene(win_rect):
+        # Floor
+        pygame.draw.rect(surface, (160, 120, 90), (win_rect.left, win_rect.bottom - int(win_rect.height * 0.25), win_rect.width, int(win_rect.height * 0.25)))
+        # Tree
+        tx = win_rect.centerx
+        ty = win_rect.bottom - int(win_rect.height * 0.25)
+        # simple layered tree inside window
+        layer_w = int(win_rect.width * 0.7)
+        for i in range(3):
+            lw = layer_w - i * int(win_rect.width * 0.2)
+            lh = int(win_rect.height * 0.18)
+            points = [(tx, ty - (i + 1) * lh), (tx - lw // 2, ty - i * lh), (tx + lw // 2, ty - i * lh)]
+            pygame.draw.polygon(surface, (40, 130, 60), points)
+            pygame.draw.polygon(surface, (80, 170, 90), points, 2)
+        # Trunk
+        pygame.draw.rect(surface, (100, 70, 40), (tx - 6, ty - 10, 12, 10))
+        # Ornaments
+        for _ in range(8):
+            ox = random.randint(win_rect.left + 6, win_rect.right - 6)
+            oy = random.randint(win_rect.top + 6, ty - 6)
+            pygame.draw.circle(surface, random.choice([(255,50,50),(255,215,0),(50,150,255)]), (ox, oy), 3)
+        # Gifts
+        gift_w = int(win_rect.width * 0.18)
+        gift_h = int(win_rect.height * 0.12)
+        gifts = [
+            (win_rect.left + int(win_rect.width * 0.12), ty - gift_h, (200, 20, 20), (255,215,0)),
+            (tx - gift_w // 2, ty - gift_h - 6, (0, 150, 0), (220,20,20)),
+            (win_rect.right - int(win_rect.width * 0.3), ty - gift_h + 4, (20, 100, 200), (255,255,255)),
+        ]
+        for gx, gy, c, rc in gifts:
+            pygame.draw.rect(surface, c, (gx, gy, gift_w, gift_h))
+            pygame.draw.rect(surface, rc, (gx + gift_w // 2 - 5, gy, 10, gift_h))
+            pygame.draw.rect(surface, rc, (gx, gy + gift_h // 2 - 5, gift_w, 10))
+
+    # Draw scenes, curtains, mullions, frame, then glare overlay
+    draw_sleeping_scene(upstairs_win)
+    draw_tree_gifts_scene(downstairs_win)
+    draw_curtains(upstairs_win)
+    draw_curtains(downstairs_win)
+    draw_window_mullions(upstairs_win)
+    draw_window_mullions(downstairs_win)
+    draw_window_frame(upstairs_win)
+    draw_window_frame(downstairs_win)
+    glass_reflection(upstairs_win)
+    glass_reflection(downstairs_win)
+
+    # Simple porch steps
+    step_height = int(8 * scale)
+    for i in range(2):
+        pygame.draw.rect(surface, (150, 110, 80), (door_rect.left - int(4 * scale), sy - door_h + door_h + i * step_height, door_w + int(8 * scale), step_height))
+
+
+def draw_snowman(surface, x, y, scale=1.0, phase=0.0):
+    """Draw a friendly snowman."""
+    sx = to_screen_x(x)
+    sy = to_screen_y(y)
+    base_r = int(28 * scale)
+    mid_r = int(20 * scale)
+    head_r = int(14 * scale)
+
+    # Shadows
+    shadow = pygame.Surface((base_r * 4, base_r * 2), pygame.SRCALPHA)
+    pygame.draw.ellipse(shadow, (0, 0, 0, 70), (0, 0, base_r * 4, base_r))
+    surface.blit(shadow, (sx - base_r * 2, sy - int(base_r * 0.2)))
+
+    # Body
+    pygame.draw.circle(surface, SNOW_WHITE, (sx, sy), base_r)
+    pygame.draw.circle(surface, SNOW_WHITE, (sx, sy - int(base_r + mid_r * 0.2)), mid_r)
+    pygame.draw.circle(surface, SNOW_WHITE, (sx, sy - int(base_r + mid_r + head_r * 0.6)), head_r)
+
+    # Buttons
+    for i in range(3):
+        pygame.draw.circle(surface, (40, 40, 40), (sx, sy - int(i * 12 * scale)), max(2, int(3 * scale)))
+
+    # Eyes and nose
+    eye_y = sy - int(base_r + mid_r + head_r * 0.8)
+    pygame.draw.circle(surface, (0, 0, 0), (sx - int(5 * scale), eye_y), max(1, int(2 * scale)))
+    pygame.draw.circle(surface, (0, 0, 0), (sx + int(5 * scale), eye_y), max(1, int(2 * scale)))
+    pygame.draw.polygon(surface, (255, 140, 0), [
+        (sx, eye_y + int(3 * scale)),
+        (sx + int(16 * scale), eye_y + int(2 * scale)),
+        (sx, eye_y + int(5 * scale))
+    ])
+
+    # Smile
+    pygame.draw.arc(surface, (0, 0, 0), (sx - int(10 * scale), eye_y + int(6 * scale), int(20 * scale), int(10 * scale)), math.pi * 0.1, math.pi * 0.9, 2)
+
+    # Arms
+    arm_y = sy - int(base_r + mid_r * 0.2)
+    arm_len = int(38 * scale)
+    sway = math.sin(phase * 0.5) * 4 * scale
+    pygame.draw.line(surface, (120, 80, 40), (sx - mid_r, arm_y), (sx - mid_r - arm_len, arm_y + int(4 * scale + sway)), int(3 * scale))
+    pygame.draw.line(surface, (120, 80, 40), (sx + mid_r, arm_y), (sx + mid_r + arm_len, arm_y + int(-4 * scale - sway)), int(3 * scale))
+
+    # Hat
+    brim_w = int(38 * scale)
+    pygame.draw.rect(surface, (30, 30, 30), (sx - brim_w // 2, eye_y - int(12 * scale), brim_w, int(5 * scale)))
+    pygame.draw.rect(surface, (40, 40, 40), (sx - int(16 * scale), eye_y - int(32 * scale), int(32 * scale), int(20 * scale)))
+    pygame.draw.rect(surface, (200, 0, 0), (sx - int(16 * scale), eye_y - int(24 * scale), int(32 * scale), int(6 * scale)))
+
+
 def draw_reindeer(surface, x, y, scale=1.0, phase=0.0):
     """Draw a stylized reindeer with slight animated leg motion."""
     sx = to_screen_x(x)
@@ -980,7 +1267,7 @@ def draw_santa(surface, x, y, wave_offset=0):
                         (spark_x, spark_y + spark_size*2), 1)
 
 # Create snow particles
-snow_particles = [SnowParticle() for _ in range(400)]
+snow_particles = [SnowParticle() for _ in range(700)]
 
 # Start music once
 start_music()
@@ -1011,8 +1298,11 @@ while running:
     draw_realistic_tree(screen, -280, -400, 1.1, 0)
     draw_realistic_tree(screen, 80, -400, 1.3, 100)
     
-    # Sleigh with reindeer flying above the trees
-    draw_sleigh_team(screen, 180, 120, scale=0.8, phase=animation_frame)
+    # Bring house to foreground (front) on the left side
+    draw_cozy_house(screen, -380, -400, 0.95, animation_frame)
+
+    # Sleigh with reindeer — resting on snowy ground at right
+    draw_sleigh_team(screen, 260, -370, scale=0.7, phase=animation_frame)
 
     # Draw Santa Claus waving in the center
     draw_santa(screen, -100, -370, animation_frame)
@@ -1026,13 +1316,17 @@ while running:
     draw_present(screen, 85, -442, 38, 32, (255, 215, 0), RED)
     draw_present(screen, 130, -440, 32, 28, (150, 0, 200), (255, 255, 100))
     draw_present(screen, 105, -420, 25, 22, (20, 150, 220), (200, 0, 0))
+
+    # Snowman near the right tree
+    draw_snowman(screen, 180, -420, 0.9, animation_frame)
     
     # Draw Merry Christmas banner
     draw_merry_christmas_banner(screen)
     
-    # Update and draw snow
+    # Update and draw snow with gentle global wind for uniform motion
+    wind_dx = math.sin(animation_frame * 0.25) * 0.06
     for particle in snow_particles:
-        particle.update()
+        particle.update(wind_dx)
         particle.draw(screen)
     
     # Update display
